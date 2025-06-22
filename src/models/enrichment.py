@@ -21,6 +21,15 @@ class LeadAnalysis:
     lead_score_adjustment: int
     confidence: float
     reasoning: str
+    
+    def to_dict(self) -> Dict[str, any]:
+        """Convert to dictionary for HubSpot update."""
+        return {
+            "buyer_persona": self.buyer_persona,
+            "lead_score_adjustment": self.lead_score_adjustment,
+            "confidence": self.confidence,
+            "reasoning": self.reasoning
+        }
 
 
 @dataclass
