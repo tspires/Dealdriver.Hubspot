@@ -76,19 +76,60 @@ class DomainPipeline:
         leads_csv: str
     ) -> None:
         """Process domains using Celery for distributed execution."""
+        from src.tasks.celery_tasks import scrape_domain, enrich_company, enrich_leads
+        import time
+        
         logger.info(f"Processing {len(domains)} domains with Celery")
         
-        # Submit all domain pipelines to Celery
-        results = []
-        for domain in domains:
-            result = process_domain_pipeline.delay(domain, company_csv, leads_csv)
-            results.append((domain, result))
-            logger.info(f"Submitted pipeline for {domain} (task_id: {result.id})")
+        # Create CSV files with headers
+        self._initialize_csv_files(company_csv, leads_csv)
         
-        # Monitor results
-        logger.info("All domains submitted. Monitor Celery workers for progress.")
-        logger.info(f"Company CSV will be written to: {company_csv}")
-        logger.info(f"Leads CSV will be written to: {leads_csv}")
+        # Phase 1: Scrape all domains sequentially for simplicity
+        logger.info("Phase 1: Scraping all domains...")
+        scrape_results = []
+        for domain in domains:
+            logger.info(f"Scraping {domain}...")
+            result = scrape_domain.delay(domain)
+            try:
+                scrape_result = result.get(timeout=300)  # 5 minute timeout per domain
+                scrape_results.append(scrape_result)
+                logger.info(f"Scraping completed for {domain}: {scrape_result}")
+            except Exception as e:
+                logger.error(f"Scraping failed for {domain}: {str(e)}")
+                scrape_results.append({"domain": domain, "success": False, "error": str(e)})
+        
+        logger.info(f"Scraping phase completed. {len(scrape_results)} domains processed.")
+        
+        # Phase 2: Enrich companies and leads sequentially
+        logger.info("Phase 2: Enriching companies and leads...")
+        for domain in domains:
+            # Enrich company
+            logger.info(f"Enriching company data for {domain}...")
+            try:
+                company_result = enrich_company.delay(domain)
+                company_result.get(timeout=600)  # 10 minute timeout
+                logger.info(f"Company enrichment completed for {domain}")
+            except Exception as e:
+                logger.error(f"Company enrichment failed for {domain}: {str(e)}")
+            
+            # Enrich leads
+            logger.info(f"Enriching leads data for {domain}...")
+            try:
+                leads_result = enrich_leads.delay(domain)
+                leads_result.get(timeout=600)  # 10 minute timeout
+                logger.info(f"Leads enrichment completed for {domain}")
+            except Exception as e:
+                logger.error(f"Leads enrichment failed for {domain}: {str(e)}")
+        
+        logger.info("Enrichment phase completed.")
+        
+        # Phase 3: Export to CSV
+        logger.info("Phase 3: Exporting to CSV...")
+        self._export_results_to_csv(domains, company_csv, leads_csv)
+        
+        logger.info(f"Processing complete. Results written to:")
+        logger.info(f"  Companies: {company_csv}")
+        logger.info(f"  Leads: {leads_csv}")
     
     def _process_with_luigi(
         self,
@@ -141,6 +182,158 @@ class DomainPipeline:
         
         logger.info("HubSpot import completed")
     
+    def _initialize_csv_files(self, company_csv: str, leads_csv: str) -> None:
+        """Initialize CSV files with headers."""
+        import csv
+        from pathlib import Path
+        
+        # Company CSV headers
+        company_headers = [
+            "domain", "enriched_at", "success", "error", "scraped_url",
+            "emails_found", "business_type", "naics_code", "target_market",
+            "products_services", "value_propositions", "competitive_advantages",
+            "technologies", "certifications", "pain_points", "confidence_score"
+        ]
+        
+        # Lead CSV headers
+        lead_headers = [
+            "email", "first_name", "last_name", "company_domain",
+            "enriched_at", "error", "buyer_persona", "lead_score_adjustment"
+        ]
+        
+        # Create company CSV
+        Path(company_csv).parent.mkdir(parents=True, exist_ok=True)
+        with open(company_csv, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(company_headers)
+        
+        # Create leads CSV
+        Path(leads_csv).parent.mkdir(parents=True, exist_ok=True)
+        with open(leads_csv, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            writer.writerow(lead_headers)
+    
+    def _export_results_to_csv(self, domains: List[str], company_csv: str, leads_csv: str) -> None:
+        """Export enriched results to CSV files."""
+        import json
+        import csv
+        from pathlib import Path
+        
+        companies_written = 0
+        leads_written = 0
+        
+        for domain in domains:
+            try:
+                # Export company data
+                company_file = Path(f"data/enriched_companies/raw/{domain}.json")
+                if company_file.exists():
+                    with open(company_file, 'r') as f:
+                        company_data = json.load(f)
+                    
+                    row = self._prepare_company_row(company_data)
+                    with open(company_csv, 'a', newline='', encoding='utf-8') as f:
+                        fieldnames = [
+                            "domain", "enriched_at", "success", "error", "scraped_url",
+                            "emails_found", "business_type", "naics_code", "target_market",
+                            "products_services", "value_propositions", "competitive_advantages",
+                            "technologies", "certifications", "pain_points", "confidence_score"
+                        ]
+                        writer = csv.DictWriter(f, fieldnames=fieldnames)
+                        writer.writerow(row)
+                    companies_written += 1
+                
+                # Export leads data
+                leads_file = Path(f"data/enriched_leads/raw/{domain}.json")
+                if leads_file.exists():
+                    with open(leads_file, 'r') as f:
+                        leads_data = json.load(f)
+                    
+                    leads = leads_data.get("leads", [])
+                    if leads:
+                        rows = [self._prepare_lead_row(lead, leads_data) for lead in leads]
+                        with open(leads_csv, 'a', newline='', encoding='utf-8') as f:
+                            fieldnames = [
+                                "email", "first_name", "last_name", "company_domain",
+                                "enriched_at", "error", "buyer_persona", "lead_score_adjustment"
+                            ]
+                            writer = csv.DictWriter(f, fieldnames=fieldnames)
+                            writer.writerows(rows)
+                        leads_written += len(rows)
+                        
+            except Exception as e:
+                logger.warning(f"Failed to export data for {domain}: {str(e)}")
+        
+        logger.info(f"Exported {companies_written} companies and {leads_written} leads to CSV")
+    
+    def _prepare_company_row(self, data: dict) -> dict:
+        """Prepare a company row for CSV export."""
+        row = {
+            "domain": data.get("domain", ""),
+            "enriched_at": data.get("enriched_at", ""),
+            "success": data.get("success", False),
+            "error": data.get("error", ""),
+            "scraped_url": data.get("scraped_url", ""),
+            "emails_found": ";".join(data.get("emails_found", []))
+        }
+        
+        # Add analysis fields if available
+        if data.get("analysis"):
+            analysis = data["analysis"]
+            row.update({
+                "business_type": analysis.get("business_type_description", ""),
+                "naics_code": analysis.get("naics_code", ""),
+                "target_market": analysis.get("target_market", ""),
+                "products_services": ";".join(analysis.get("primary_products_services", [])),
+                "value_propositions": ";".join(analysis.get("value_propositions", [])),
+                "competitive_advantages": ";".join(analysis.get("competitive_advantages", [])),
+                "technologies": ";".join(analysis.get("technologies_used", [])),
+                "certifications": ";".join(analysis.get("certifications_awards", [])),
+                "pain_points": ";".join(analysis.get("pain_points_addressed", [])),
+                "confidence_score": analysis.get("confidence_score", 0)
+            })
+        else:
+            # Add empty fields
+            row.update({
+                "business_type": "",
+                "naics_code": "",
+                "target_market": "",
+                "products_services": "",
+                "value_propositions": "",
+                "competitive_advantages": "",
+                "technologies": "",
+                "certifications": "",
+                "pain_points": "",
+                "confidence_score": 0
+            })
+        
+        return row
+    
+    def _prepare_lead_row(self, lead: dict, enriched_data: dict) -> dict:
+        """Prepare a lead row for CSV export."""
+        row = {
+            "email": lead.get("email", ""),
+            "first_name": lead.get("first_name", ""),
+            "last_name": lead.get("last_name", ""),
+            "company_domain": enriched_data.get("domain", ""),
+            "enriched_at": enriched_data.get("enriched_at", ""),
+            "error": lead.get("error", "")
+        }
+        
+        # Add analysis fields if available
+        if lead.get("analysis"):
+            analysis = lead["analysis"]
+            row.update({
+                "buyer_persona": analysis.get("buyer_persona", ""),
+                "lead_score_adjustment": analysis.get("lead_score_adjustment", 0)
+            })
+        else:
+            row.update({
+                "buyer_persona": "",
+                "lead_score_adjustment": 0
+            })
+        
+        return row
+        
     def process_single_domain(
         self,
         domain: str,

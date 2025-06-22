@@ -130,33 +130,39 @@ def export_leads_csv(self, domain: str, output_file: str) -> Dict[str, Any]:
 @app.task
 def process_domain_pipeline(domain: str, company_csv: str, leads_csv: str) -> Dict[str, Any]:
     """Process a complete domain pipeline with all steps."""
-    from celery import group, chain
-    
     logger.info(f"Starting complete pipeline for domain: {domain}")
     
-    # Create a chain of tasks
-    pipeline = chain(
-        # First scrape the domain
-        scrape_domain.s(domain),
+    try:
+        # Step 1: Scrape the domain
+        scrape_result = scrape_domain.apply(args=[domain])
+        if not scrape_result.successful():
+            return {
+                "domain": domain,
+                "status": "failed",
+                "step": "scrape",
+                "error": str(scrape_result.result)
+            }
         
-        # Then enrich both company and leads in parallel
-        group(
-            enrich_company.s(domain),
-            enrich_leads.s(domain)
-        ),
+        # Step 2: Enrich company data
+        company_result = enrich_company.apply(args=[domain])
+        company_success = company_result.successful()
         
-        # Finally export to CSV in parallel
-        group(
-            export_company_csv.s(domain, company_csv),
-            export_leads_csv.s(domain, leads_csv)
-        )
-    )
-    
-    # Execute the pipeline
-    result = pipeline.apply_async()
-    
-    return {
-        "domain": domain,
-        "pipeline_id": result.id,
-        "status": "started"
-    }
+        # Step 3: Enrich leads data  
+        leads_result = enrich_leads.apply(args=[domain])
+        leads_success = leads_result.successful()
+        
+        return {
+            "domain": domain,
+            "status": "completed",
+            "scrape_success": True,
+            "company_enrichment_success": company_success,
+            "leads_enrichment_success": leads_success
+        }
+        
+    except Exception as e:
+        logger.error(f"Pipeline failed for {domain}: {str(e)}")
+        return {
+            "domain": domain,
+            "status": "failed",
+            "error": str(e)
+        }

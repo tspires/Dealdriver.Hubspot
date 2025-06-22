@@ -16,6 +16,7 @@ logging.getLogger("luigi").setLevel(logging.ERROR)
 
 from src.pipeline import DomainPipeline
 from src.tasks.export import ExportAllCSVTask
+from src.models.enrichment import CompanyAnalysis, LeadAnalysis
 
 
 class TestE2EPipeline:
@@ -96,52 +97,56 @@ class TestE2EPipeline:
         def company_analysis(self, content):
             # Return realistic analysis based on domain
             if "programming language" in content.content:
-                return Mock(
+                return CompanyAnalysis(
                     business_type_description="Programming language foundation",
+                    company_summary="Open-source programming language organization",
+                    industry="Software Development",
                     naics_code="611420",
+                    company_owner=None,
+                    city="Wilmington",
+                    state_region="Delaware",
+                    postal_code="19801",
+                    country="United States",
+                    number_of_employees="10-50",
+                    annual_revenue=None,
+                    timezone="UTC-5",
                     target_market="Developers worldwide",
-                    confidence_score=0.95,
-                    model_dump=lambda: {
-                        "business_type_description": "Programming language foundation",
-                        "naics_code": "611420",
-                        "target_market": "Developers worldwide",
-                        "primary_products_services": ["Language development", "Documentation"],
-                        "value_propositions": ["Easy to learn", "Powerful"],
-                        "competitive_advantages": ["Large community"],
-                        "technologies_used": ["C", "Python"],
-                        "certifications_awards": [],
-                        "pain_points_addressed": ["Development efficiency"],
-                        "confidence_score": 0.95
-                    }
+                    primary_products_services=["Language development", "Documentation"],
+                    value_propositions=["Easy to learn", "Powerful"],
+                    competitive_advantages=["Large community"],
+                    technologies_used=["C", "Python"],
+                    certifications_awards=[],
+                    pain_points_addressed=["Development efficiency"],
+                    confidence_score=0.95
                 )
             else:
-                return Mock(
+                return CompanyAnalysis(
                     business_type_description="Technology company",
+                    company_summary="Technology services provider",
+                    industry="Information Technology",
                     naics_code="541511",
+                    company_owner=None,
+                    city="San Francisco",
+                    state_region="California",
+                    postal_code="94105",
+                    country="United States",
+                    number_of_employees="100-500",
+                    annual_revenue="$10M-50M",
+                    timezone="UTC-8",
                     target_market="Developers and enterprises",
-                    confidence_score=0.85,
-                    model_dump=lambda: {
-                        "business_type_description": "Technology company",
-                        "naics_code": "541511",
-                        "target_market": "Developers and enterprises",
-                        "primary_products_services": ["Software", "Services"],
-                        "value_propositions": ["Innovation", "Reliability"],
-                        "competitive_advantages": ["Market leader"],
-                        "technologies_used": ["Various"],
-                        "certifications_awards": [],
-                        "pain_points_addressed": ["Digital transformation"],
-                        "confidence_score": 0.85
-                    }
+                    primary_products_services=["Software", "Services"],
+                    value_propositions=["Innovation", "Reliability"],
+                    competitive_advantages=["Market leader"],
+                    technologies_used=["Various"],
+                    certifications_awards=[],
+                    pain_points_addressed=["Digital transformation"],
+                    confidence_score=0.85
                 )
         
         def lead_analysis(self, content, lead_info):
-            return Mock(
+            return LeadAnalysis(
                 buyer_persona="Technical Decision Maker",
-                lead_score_adjustment=25,
-                model_dump=lambda: {
-                    "buyer_persona": "Technical Decision Maker",
-                    "lead_score_adjustment": 25
-                }
+                lead_score_adjustment=25
             )
         
         return company_analysis, lead_analysis
@@ -158,9 +163,9 @@ class TestE2EPipeline:
         
         mock_analyzer_instance = Mock()
         company_analysis, lead_analysis = mock_analyzer
-        # Bind the methods to the mock instance
-        mock_analyzer_instance.analyze_company = lambda content: company_analysis(mock_analyzer_instance, content)
-        mock_analyzer_instance.analyze_lead = lambda content, lead_info: lead_analysis(mock_analyzer_instance, content, lead_info)
+        # Bind the methods to the mock instance with correct signatures
+        mock_analyzer_instance.analyze_company = lambda content, domain=None, emails=None: company_analysis(mock_analyzer_instance, Mock(content=content))
+        mock_analyzer_instance.analyze_lead = lambda content, lead_info: lead_analysis(mock_analyzer_instance, Mock(content=content), lead_info)
         mock_analyzer_class.return_value = mock_analyzer_instance
         
         # Run pipeline for single domain
@@ -218,9 +223,9 @@ class TestE2EPipeline:
         
         mock_analyzer_instance = Mock()
         company_analysis, lead_analysis = mock_analyzer
-        # Bind the methods to the mock instance
-        mock_analyzer_instance.analyze_company = lambda content: company_analysis(mock_analyzer_instance, content)
-        mock_analyzer_instance.analyze_lead = lambda content, lead_info: lead_analysis(mock_analyzer_instance, content, lead_info)
+        # Bind the methods to the mock instance with correct signatures
+        mock_analyzer_instance.analyze_company = lambda content, domain=None, emails=None: company_analysis(mock_analyzer_instance, Mock(content=content))
+        mock_analyzer_instance.analyze_lead = lambda content, lead_info: lead_analysis(mock_analyzer_instance, Mock(content=content), lead_info)
         mock_analyzer_class.return_value = mock_analyzer_instance
         
         # Use first 5 test domains
