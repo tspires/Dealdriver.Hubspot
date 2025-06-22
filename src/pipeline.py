@@ -165,7 +165,7 @@ def run_pipeline(
     output_dir: str = "output",
     use_celery: bool = True,
     hubspot_token: Optional[str] = None,
-    import_to_hubspot: bool = False
+    import_to_hubspot: bool = True
 ) -> None:
     """
     Main entry point for running the pipeline.
@@ -175,7 +175,7 @@ def run_pipeline(
         output_dir: Directory for CSV outputs
         use_celery: Whether to use Celery for distributed processing
         hubspot_token: Optional HubSpot API token for bulk import
-        import_to_hubspot: Whether to import results to HubSpot after CSV export
+        import_to_hubspot: Whether to import results to HubSpot after CSV export (default: True)
     """
     pipeline = DomainPipeline(use_celery=use_celery, hubspot_token=hubspot_token)
     pipeline.process_domains_from_file(input_file, output_dir, use_celery, import_to_hubspot)
@@ -186,7 +186,7 @@ def run_single_domain_pipeline(
     output_dir: str = "output",
     use_celery: bool = True,
     hubspot_token: Optional[str] = None,
-    import_to_hubspot: bool = False
+    import_to_hubspot: bool = True
 ) -> None:
     """
     Main entry point for running the pipeline on a single domain.
@@ -196,7 +196,7 @@ def run_single_domain_pipeline(
         output_dir: Directory for CSV outputs
         use_celery: Whether to use Celery for distributed processing
         hubspot_token: Optional HubSpot API token for bulk import
-        import_to_hubspot: Whether to import results to HubSpot after CSV export
+        import_to_hubspot: Whether to import results to HubSpot after CSV export (default: True)
     """
     logger.info(f"Processing single domain: {domain}")
     
