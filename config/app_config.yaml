@@ -1,0 +1,47 @@
+# Dealdriver HubSpot Application Configuration
+
+hubspot:
+  # Token can be overridden by HUBSPOT_TOKEN env var
+  token: ""
+  api_version: "v3"
+  max_retries: 3
+  timeout: 30
+
+deepseek:
+  # These can be overridden by env vars
+  api_key: ""
+  endpoint: "https://api.deepseek.com"
+  model: "deepseek-chat"
+  temperature: 0.3
+  max_tokens: 4000
+
+scraping:
+  timeout: 10
+  max_pages: 10
+  enable_javascript: true
+  load_images: false
+  load_css: true
+  delay_between_requests: 1.0
+  max_retries: 1
+  headless: true
+  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+  depth: 2  # Default scraping depth (0=single page, 1=one level, 2=two levels)
+
+pipeline:
+  default_workers: 4
+  rate_limit_scraping: 2  # requests per second
+  rate_limit_api: 10      # requests per second
+  max_content_length: 50000
+  
+logging:
+  level: "INFO"
+  file: "logs/app.log"
+  max_size: "10MB"
+  backup_count: 5
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+data_paths:
+  scraped_content: "data/site_content/raw"
+  enriched_companies: "data/enriched_companies/raw"
+  enriched_leads: "data/enriched_leads/raw"
+  output_dir: "output"

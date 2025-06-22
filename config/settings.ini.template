@@ -1,0 +1,29 @@
+[hubspot]
+# HubSpot API access token
+# token = YOUR_HUBSPOT_TOKEN_HERE
+
+[deepseek]
+# DeepSeek API configuration
+# api_key = YOUR_DEEPSEEK_API_KEY_HERE
+# endpoint = https://api.deepseek.com
+
+[celery]
+# Celery broker configuration
+broker_url = redis://localhost:6379/0
+result_backend = redis://localhost:6379/0
+
+[scraping]
+# Web scraping configuration
+timeout = 10
+max_retries = 3
+enable_javascript = true
+load_images = false
+headless = true
+# Scraping depth (0=single page, 1=one level deep, 2=two levels deep)
+depth = 2
+
+[pipeline]
+# Pipeline configuration
+default_workers = 4
+rate_limit_scraping = 2  # requests per second
+rate_limit_api = 10  # requests per second
