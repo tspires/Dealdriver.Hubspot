@@ -107,6 +107,11 @@ def main() -> int:
         default=2,
         help="Maximum depth for web crawling (default: 2, single page: 0)"
     )
+    parser.add_argument(
+        "--domain",
+        type=str,
+        help="Process a single domain through the complete pipeline (scrape, enrich, export)"
+    )
     
     args = parser.parse_args()
     
@@ -165,6 +170,36 @@ def main() -> int:
             logger.info("Processing single company by ID: %s", args.company_id)
             command.process_single_company_by_id(args.company_id)
             logger.info("Single company processing completed")
+            return 0
+        
+        # Process single domain through complete pipeline
+        if args.domain:
+            logger.info("Processing single domain through complete pipeline: %s", args.domain)
+            logger.debug("Output directory: %s", args.output or "output")
+            logger.debug("Using Celery: %s", not args.no_celery)
+            logger.debug("Import to HubSpot: %s", args.import_to_hubspot)
+            
+            from src.pipeline import run_single_domain_pipeline
+            
+            # Use Celery by default, unless --no-celery flag is set
+            use_celery = not getattr(args, 'no_celery', False)
+            output_dir = args.output or "output"
+            
+            # Check if import to HubSpot is requested
+            import_to_hubspot = args.import_to_hubspot
+            if import_to_hubspot and not args.token:
+                logger.error("HubSpot import requested but no token provided")
+                return 1
+            
+            logger.info("Starting single domain pipeline processing")
+            run_single_domain_pipeline(
+                args.domain,
+                output_dir,
+                use_celery=use_celery,
+                hubspot_token=args.token if import_to_hubspot else None,
+                import_to_hubspot=import_to_hubspot
+            )
+            logger.info("Single domain pipeline processing completed successfully")
             return 0
         
         # Process domains from file

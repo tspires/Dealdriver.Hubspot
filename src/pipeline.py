@@ -179,3 +179,43 @@ def run_pipeline(
     """
     pipeline = DomainPipeline(use_celery=use_celery, hubspot_token=hubspot_token)
     pipeline.process_domains_from_file(input_file, output_dir, use_celery, import_to_hubspot)
+
+
+def run_single_domain_pipeline(
+    domain: str,
+    output_dir: str = "output",
+    use_celery: bool = True,
+    hubspot_token: Optional[str] = None,
+    import_to_hubspot: bool = False
+) -> None:
+    """
+    Main entry point for running the pipeline on a single domain.
+    
+    Args:
+        domain: Single domain to process
+        output_dir: Directory for CSV outputs
+        use_celery: Whether to use Celery for distributed processing
+        hubspot_token: Optional HubSpot API token for bulk import
+        import_to_hubspot: Whether to import results to HubSpot after CSV export
+    """
+    logger.info(f"Processing single domain: {domain}")
+    
+    # Create output directory
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    
+    # Generate output file names
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    company_csv = output_path / f"companies_{timestamp}.csv"
+    leads_csv = output_path / f"leads_{timestamp}.csv"
+    
+    pipeline = DomainPipeline(use_celery=use_celery, hubspot_token=hubspot_token)
+    
+    if use_celery and pipeline.use_celery:
+        pipeline._process_with_celery([domain], str(company_csv), str(leads_csv))
+    else:
+        pipeline._process_with_luigi([domain], str(company_csv), str(leads_csv))
+    
+    # Import to HubSpot if requested
+    if import_to_hubspot and hubspot_token:
+        pipeline._import_to_hubspot(str(company_csv), str(leads_csv))
