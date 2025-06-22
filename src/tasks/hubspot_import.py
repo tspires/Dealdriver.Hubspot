@@ -5,9 +5,14 @@ import csv
 import luigi
 import logging
 import time
+import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 import os
+
+# Add common library to path
+common_path = Path(__file__).parent.parent.parent.parent / "common"
+sys.path.insert(0, str(common_path))
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +58,7 @@ class HubSpotBulkImportTask(luigi.Task):
                 client = self._get_test_client()
             else:
                 # Import HubSpot client
-                from common.clients.hubspot import HubSpotClient
+                from clients.hubspot import HubSpotClient
 
                 # Initialize client
                 client = HubSpotClient(access_token=token)
