@@ -138,6 +138,8 @@ logs/
 *.json
 !package.json
 !package-lock.json
+nohup.out
+test_domains*.txt
 
 # OS
 .DS_Store
